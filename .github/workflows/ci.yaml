@@ -63,7 +63,7 @@ jobs:
           </settings>
           EOF
 
-      # 10. Deploy WAR to Nexus
+      # 10. Deploy WAR to Nexus file
       - name: Upload Artifact to Nexus
         run: |
           mvn deploy \
