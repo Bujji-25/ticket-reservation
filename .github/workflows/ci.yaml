@@ -1,5 +1,4 @@
-name: CI/CD Pipeline with SonarQube
-
+name: Playright tests
 on:
  workflow_dispatch: 
  push:
