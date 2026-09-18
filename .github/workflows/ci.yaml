@@ -1,4 +1,4 @@
-name: Playright tests
+name: Playright tests and maven testing
 on:
  workflow_dispatch: 
  push:
