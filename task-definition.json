@@ -1,7 +1,7 @@
 {
   "name": "my-container-1",
-  "image": "928967252538.dkr.ecr.us-east-1.amazonaws.com/ramya1435:latest",
-  "cpu": 0,
+  "image": "<IMAGE>",
+  "cpu": 1,
   "portMappings": [
     {
       "containerPort": 8080,
