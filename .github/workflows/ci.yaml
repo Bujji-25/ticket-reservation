@@ -81,12 +81,6 @@ jobs:
         docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
 ########################################
-# 10. Setup kubectl
-########################################
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-
-########################################
 # 11. Connect to EKS
 ########################################
 # 12. Replace Image in Deployment YAML
