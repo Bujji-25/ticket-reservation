@@ -1,54 +1,121 @@
-name: Playright tests and maven testing
+name: Java CI-CD Pipeline
+
 on:
- workflow_dispatch: 
- push:
+  push:
     branches:
-      - master
+      - main
+
+env:
+  AWS_REGION: us-east-1   
+  ECR_REPOSITORY:  ramya1435          
+  EKS_CLUSTER_NAME: projectecr
 
 jobs:
-
-  build:
-
-    runs-on: ubuntu-latest
+  ci-cd:
+    runs-on: ubuntu-latest       
 
     steps:
 
-      # 1. Checkout Source Code
-      - name: Checkout Source
-        uses: actions/checkout@v4
+########################################
+# 1. Checkout Code
+########################################
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
+########################################
+# 2. Setup Java
+########################################
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: temurin
+        java-version: 17
+        cache: maven
 
-      # 2. Setup Java 17
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+########################################
+# 3. Build Application
+########################################
+    - name: Build Maven
+      run: mvn clean install
 
+########################################
+# 5. Configure AWS
+########################################
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      # 3. Validate
-      - name: Validate
-        run: mvn validate
+########################################
+# 6. Login to ECR
+########################################
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
 
+########################################
+# 7. Build Docker Image
+########################################
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest .
 
-      # 4. Compile
-      - name: Compile
-        run: mvn compile
+########################################
+# 8. Trivy Scan
+########################################
+    - name: Scan Image using Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        format: table
+        severity: CRITICAL,HIGH
+        exit-code: 0
 
+########################################
+# 9. Push Image to ECR
+########################################
+    - name: Push Image to ECR
+      run: |
+        docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
-      # 5. Test
-      - name: Test
-        run: mvn test
+########################################
+# 10. Setup kubectl
+########################################
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
 
+########################################
+# 11. Connect to EKS
+########################################
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig \
+          --region $AWS_REGION \
+          --name $EKS_CLUSTER_NAME
 
-      # 6. Package
-      - name: Package
-        run: mvn package
+########################################
+# 12. Replace Image in Deployment YAML
+########################################
+    - name: Replace IMAGE placeholder
+      run: |
+        IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        sed -i "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml
 
-     
-               
-           
+########################################
+# 13. Deploy to Kubernetes
+########################################
+    - name: Deploy to EKS
+      run: |
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
 
-
-     
+########################################
+# 14. Verify Deployment
+########################################
+    - name: Verify Deployment
+      run: |
+        kubectl get pods
+        kubectl get svc
+        kubectl rollout status deployment/devops-app
