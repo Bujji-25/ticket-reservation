@@ -89,13 +89,6 @@ jobs:
 ########################################
 # 11. Connect to EKS
 ########################################
-    - name: Update kubeconfig
-      run: |
-        aws eks update-kubeconfig \
-          --region $AWS_REGION \
-          --name $EKS_CLUSTER_NAME
-
-########################################
 # 12. Replace Image in Deployment YAML
 ########################################
     - name: Replace IMAGE placeholder
