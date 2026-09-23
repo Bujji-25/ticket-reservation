@@ -13,12 +13,16 @@ jobs:
 
     env:
       ECR_REPOSITORY: ramya1435
+      AWS_REGION: us-east-1
+      IMAGE_TAG: latest
 
     steps:
 
+    # 1. Checkout source code
     - name: Checkout Source
       uses: actions/checkout@v4
 
+    # 2. Setup Java
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
@@ -26,44 +30,87 @@ jobs:
         java-version: '17'
         cache: maven
 
+    # 3. Build WAR
     - name: Build WAR
-      run: mvn clean package -DskipTests
+      run: |
+        mvn clean package -DskipTests
 
+    # 4. Check generated files
+    - name: Check Build Files
+      run: |
+        echo "Files inside target:"
+        ls -la target
+
+    # 5. Configure AWS credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+        aws-region: ${{ env.AWS_REGION }}
 
+    # 6. Login to ECR
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
 
+    # 7. Get AWS Account ID
+    - name: Get AWS Account ID
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_ENV
+
+    # 8. Build Docker image
     - name: Build Docker Image
       run: |
-        docker build -t $ECR_REPOSITORY:latest .
+        docker build \
+          -t $ECR_REPOSITORY:$IMAGE_TAG \
+          .
 
+    # 9. Tag Docker image
     - name: Tag Docker Image
       run: |
-        docker tag $ECR_REPOSITORY:latest \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
+        ECR_REGISTRY=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
 
+        docker tag \
+          $ECR_REPOSITORY:$IMAGE_TAG \
+          $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    # 10. Push Docker image to ECR
     - name: Push Docker Image
       run: |
+        ECR_REGISTRY=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
         docker push \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/$ECR_REPOSITORY:latest
+          $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    # 11. Show image
+    - name: Show Docker Image
+      run: |
+        echo "Docker image:"
+        echo "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+
+    # 12. Update ECS Task Definition
     - name: Update ECS Task Definition
       run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          sed -i "s|<IMAGE>|$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}|g" task-definition.json
-          cat task-definition.json > new-task.json
+        ECR_REGISTRY=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+        IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
+        echo "Using image:"
+        echo "$IMAGE"
+
+        sed -i "s|<IMAGE>|$IMAGE|g" task-definition.json
+
+        echo "Updated task definition:"
+        cat task-definition.json
+
+        cp task-definition.json new-task.json
+
+    # 13. Deploy to ECS
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
-          task-definition: new-task.json
-          service: ${{ secrets.ECS_SERVICE }}
-          cluster: ${{ secrets.ECS_CLUSTER }}
-          wait-for-service-stability: true
-          
+        task-definition: new-task.json
+        service: ${{ secrets.ECS_SERVICE }}
+        cluster: ${{ secrets.ECS_CLUSTER }}
+        wait-for-service-stability: true
