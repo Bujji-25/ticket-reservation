@@ -3,7 +3,7 @@
   "containerDefinitions": [
     {
       "name": "my-container-1",
-      "image": "928967252538.dkr.ecr.us-east-1.amazonaws.com/ramya1435:latest",
+      "image": "<IMAGE>"
       "cpu": 0,
       "portMappings": [
         {
