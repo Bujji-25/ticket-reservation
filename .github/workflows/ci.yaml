@@ -85,12 +85,6 @@ jobs:
 ########################################
 # 12. Replace Image in Deployment YAML
 ########################################
-    - name: Replace IMAGE placeholder
-      run: |
-        IMAGE=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-        sed -i "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/deployment.yaml
-
-########################################
 # 13. Deploy to Kubernetes
 ########################################
     - name: Deploy to EKS
