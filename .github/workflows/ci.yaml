@@ -58,13 +58,19 @@ jobs:
       run: |
             docker push \
             $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
-    
     - name: Update ECS Task Definition
       run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          sed -i "s|<IMAGE>|$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}|g" task-definition.json
-          cat task-definition.json > new-task.json
-
+            sed -i "s|<IMAGE>|$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest|g" task-definition.json
+            cat task-definition.json > new-task.json
+    - name: Check ECS Service
+      run: |
+            echo "Checking ECS service..."
+            aws ecs describe-services \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_SERVICE }}" \
+            --region "$AWS_REGION"
+      
+   
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
